@@ -1,5 +1,4 @@
-# GuiaDeDireitos
-Um guia gratuito que ajuda famílias a descobrir quais ajudas do governo podem ter, quanto elas valem e por onde começar.
+# Guia de Direitos
 
 **A free, plain-language tool that helps low-income Brazilian families find out which social benefits they may be entitled to, what each is worth, and where to start.**
 
@@ -43,6 +42,9 @@ It covers income support (Bolsa Família, BPC, Gás do Povo), discounts (electri
 | `app.js` | Questions and calculations | Only to change questions or logic |
 | `style.css` | Colours and typography | Only to change the look |
 | `_headers` | Security headers (apply once the site is hosted) | No |
+| `functions/api/feedback.js` | Receives and stores "Did this guide help?" | No |
+| `banco/criar-tabelas.sql` | Creates the feedback database (run once) | No |
+| `banco/consultas.sql` | Ready-made queries to read feedback | No |
 | `README.md` | This guide (shown on the GitHub page) | No |
 | `LEIA-ME.md` | The same guide in Portuguese | No |
 
@@ -85,10 +87,35 @@ Bolsa Família amounts are fixed in reais and must be checked separately.
 
 `_headers` also works on Netlify.
 
+## Feedback: "Este guia te ajudou?"
+
+The results screen ends with two faces, **Sim, ajudou** (yes, it helped) and **Não ajudou** (it didn't). One tap sends the answer and shows a thank-you message.
+
+Stored: yes/no, the names of the benefits shown, household size, the rules version and the date. **Nothing that identifies the person.** IP addresses are not stored; a salted daily hash is used only to cap submissions at 20 per connection per day, and it is deleted the next day.
+
+Answers are stored in Cloudflare D1 (free tier, far above expected usage) via a Pages Function.
+
+### Set-up (once, about 10 minutes)
+
+Complete steps 1 to 3 **before** pushing the new files.
+
+1. **Create the database.** Cloudflare dashboard › **Storage & Databases › D1 SQL Database › Create**. Name: `guia-feedback`.
+2. **Create the tables.** Open the database › **Console**, paste `banco/criar-tabelas.sql` and click **Execute**.
+3. **Bind it to the site.** **Workers & Pages ›** your project **› Settings › Bindings › Add › D1 database**. Variable name: `DB`; database: `guia-feedback`. Save.
+4. **(Optional)** **Settings › Variables and Secrets**: add a secret named `SAL` with a long random phrase.
+5. **Push the files** (`app.js`, `style.css`, `functions/`, `banco/`). Cloudflare redeploys automatically.
+6. **Test.** Complete a check on the site, tap a face, then run `SELECT * FROM feedback;` in the D1 Console.
+
+If the database is not bound, the site still works; the answer simply isn't stored.
+
+### Reading the results
+
+Paste any query from `banco/consultas.sql` into the D1 Console: yes/no counts, the percentage of "yes", daily totals, and the latest "didn't help" answers with the benefits shown, which point to what is confusing. Delete answers older than a year as good privacy practice (last query in the file).
+
 ## Security
 
 Already in place:
-- No database, login or submitted forms, so there is no user data to steal.
+- No login and no personal data collected, so there is no user data to steal. The only stored data is the anonymous yes/no feedback.
 - A Content Security Policy that only allows this site's own code and Google Fonts.
 - All text from `regras.js` is rendered as plain text, never as code.
 - The page cannot be embedded in other sites; HTTPS is enforced; camera, microphone and location are disabled.

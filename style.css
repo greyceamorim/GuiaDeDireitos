@@ -112,3 +112,13 @@ svg{flex-shrink:0}
 .legenda{display:flex;flex-direction:column;gap:12px}
 .leg{display:flex;flex-direction:column;align-items:flex-start;gap:6px}
 .leg p{font-size:16px}
+.feedback{align-items:center;text-align:center}
+.fb-titulo{margin:0;font-size:22px;font-weight:700}
+.fb-botoes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;width:100%}
+.fb{min-height:120px;border:2px solid var(--line);border-radius:18px;background:var(--card);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;font-size:18px;font-weight:700;padding:12px}
+.fb.sim svg{color:var(--accent)}
+.fb.nao svg{color:var(--warm-icon)}
+.fb.sim:active{background:var(--accent-soft)}
+.fb.nao:active{background:var(--warm)}
+.obrigado{background:var(--accent-soft)}
+.obrigado .fb-titulo,.obrigado p{color:var(--accent-deep)}

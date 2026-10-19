@@ -15,6 +15,8 @@
     som: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg>',
     seta: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>',
     doc: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8"/><path d="M8 12h8"/><path d="M8 16h5"/></svg>',
+    feliz: '<svg width="56" height="56" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="24" cy="24" r="20"/><circle cx="17" cy="19" r="1.5" fill="currentColor"/><circle cx="31" cy="19" r="1.5" fill="currentColor"/><path d="M15 28c2.5 4 5.5 6 9 6s6.5-2 9-6"/></svg>',
+    triste: '<svg width="56" height="56" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="24" cy="24" r="20"/><circle cx="17" cy="19" r="1.5" fill="currentColor"/><circle cx="31" cy="19" r="1.5" fill="currentColor"/><path d="M15 34c2.5-4 5.5-6 9-6s6.5 2 9 6"/></svg>',
     zap: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-13.4 7.9L3 21l1.1-4.6A9 9 0 1 1 21 12z"/></svg>'
   };
 
@@ -202,10 +204,58 @@
     if (total === 0) h += '<div class="dir"><p>Isso não quer dizer que não exista nenhum. Uma conversa no CRAS pode mostrar outros caminhos.</p></div>';
     if (precisaCad) h += '<section class="card"><h3 class="h3">Levar ao CRAS</h3><div class="docs">' +
       ['RG ou certidão de nascimento e CPF de todos da casa', 'Comprovante de endereço (pode ser a conta de luz)', 'Carteira de trabalho, se tiver'].map(function (t) { return '<div class="doc">' + I.doc + '<div>' + t + '</div></div>'; }).join('') + '</div></section>';
+    h += cartaoFeedback(r);
     h += '<a class="btn" target="_blank" rel="noopener noreferrer" href="https://wa.me/?text=' + encodeURIComponent(mensagem(r, titulo, precisaCad)) + '">' + I.zap + 'Enviar resumo pelo WhatsApp</a>' +
       '<button type="button" class="link" data-a="recomecar">Fazer outra consulta</button>' +
       '<p class="rodape">Valores estimados, não garantidos. Quando um benefício novo entra, a renda da família muda e os outros valores podem mudar também. Quem confirma é o CRAS ou o órgão oficial, sempre de graça.<br>Regras conferidas em ' + esc(R.conferido_em) + '.</p>';
     return h;
+  }
+
+  /* ---------- Feedback: "Este guia te ajudou?" ----------
+     Envia só: sim/não, nomes das ajudas que apareceram, número de pessoas e a data das regras.
+     Nada que identifique quem respondeu. Se não houver internet, guarda e tenta de novo depois. */
+  var PEND = 'guia_feedback_pendente';
+  var ultimoResultado = null;
+
+  function cartaoFeedback(r) {
+    ultimoResultado = r;
+    if (s.voto) {
+      return '<section class="card feedback obrigado" aria-live="polite"><div class="fb-titulo">Obrigada!</div>' +
+        '<p>Sua resposta ajuda a melhorar o guia.</p></section>';
+    }
+    return '<section class="card feedback"><h3 class="fb-titulo" id="fbq">Este guia te ajudou?</h3>' +
+      '<div class="fb-botoes" role="group" aria-labelledby="fbq">' +
+      '<button type="button" class="fb sim" data-a="voto" data-v="sim">' + I.feliz + '<span>Sim, ajudou</span></button>' +
+      '<button type="button" class="fb nao" data-a="voto" data-v="nao">' + I.triste + '<span>Não ajudou</span></button>' +
+      '</div></section>';
+  }
+
+  function dadosFeedback(voto, r) {
+    var nomes = [];
+    (r ? r.cats : []).forEach(function (c) { c.itens.forEach(function (it) { nomes.push(it.nome + ' (' + CHIP[it.nivel] + ')'); }); });
+    return { voto: voto, beneficios: nomes.slice(0, 15), pessoas: Math.max(1, pessoas()), versao: String(R && R.conferido_em || '') };
+  }
+
+  function enviar(dados) {
+    if (!/^https?:$/.test(location.protocol) || !window.fetch) return Promise.reject(new Error('offline'));
+    return fetch('/api/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dados), keepalive: true })
+      .then(function (resp) { if (!resp.ok && resp.status !== 429) throw new Error('HTTP ' + resp.status); });
+  }
+
+  function guardarPendente(dados) {
+    try {
+      var lista = JSON.parse(localStorage.getItem(PEND) || '[]');
+      lista.push(dados);
+      localStorage.setItem(PEND, JSON.stringify(lista.slice(-10)));
+    } catch (e) { /* sem armazenamento: tudo bem, a resposta só não é reenviada */ }
+  }
+
+  function reenviarPendentes() {
+    var lista;
+    try { lista = JSON.parse(localStorage.getItem(PEND) || '[]'); } catch (e) { return; }
+    if (!lista.length) return;
+    try { localStorage.removeItem(PEND); } catch (e) { return; }
+    lista.forEach(function (d) { enviar(d).catch(function () { guardarPendente(d); }); });
   }
 
   function rodape() {
@@ -231,7 +281,8 @@
 
       '<section class="card sobre"><h2 class="h3">Seus dados</h2>' +
       '<p>Não pedimos nome, CPF nem documento. As respostas ficam só neste celular e não são guardadas nem enviadas para ninguém. Quando você fecha a página, elas somem.</p>' +
-      '<p>O resumo só vai para o WhatsApp se você tocar no botão e escolher para quem mandar.</p></section>' +
+      '<p>O resumo só vai para o WhatsApp se você tocar no botão e escolher para quem mandar.</p>' +
+      '<p>Se você responder se o guia ajudou, guardamos só a resposta (sim ou não), quais ajudas apareceram e quantas pessoas moram na casa. Nada que identifique você.</p></section>' +
 
       '<section class="card sobre aviso"><h2 class="h3">Importante</h2>' +
       '<p>Este é um projeto independente e voluntário. <strong>Não é um site do governo</strong> e não substitui o atendimento do CRAS ou do INSS.</p>' +
@@ -291,6 +342,14 @@
     else if (a === 'continuar') { if (b.getAttribute('aria-disabled') === 'true') return; avancar(); }
     else if (a === 'voltar') { if (s.qi <= 0) s.tela = 'intro'; else s.qi--; render(true); }
     else if (a === 'ouvir') { s.ouvindo = !s.ouvindo; render(false); }
+    else if (a === 'voto') {
+      if (s.voto) return;
+      var voto = b.getAttribute('data-v') === 'sim' ? 'sim' : 'nao';
+      var dados = dadosFeedback(voto, ultimoResultado);
+      s.voto = voto; render(false);
+      var fb = app.querySelector('.feedback'); if (fb) fb.scrollIntoView({ block: 'nearest' });
+      enviar(dados).catch(function () { guardarPendente(dados); });
+    }
     else if (a === 'recomecar') { s = novo(); render(true); }
     else if (a === 'sobre') { s.anterior = s.tela; s.tela = 'sobre'; render(true); }
     else if (a === 'fechar-sobre') { s.tela = s.anterior || 'intro'; render(true); }
@@ -300,6 +359,7 @@
   var dados = window.REGRAS;
   if (dados && Number(dados.salario_minimo) > 0) {
     R = dados; render(false);
+    reenviarPendentes();
   } else {
     app.innerHTML = topo() + '<div class="erro" role="alert"><strong>Não foi possível carregar as regras agora.</strong><br>Tente de novo em alguns minutos. Se você cuida do site, confira se o arquivo regras.js está correto.</div>';
     if (window.console) console.error('regras.js não carregou ou está com erro.');

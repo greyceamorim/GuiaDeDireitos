@@ -26,6 +26,9 @@ Princípios: é de graça e sem cadastro, não pede nem guarda dados pessoais, u
 | `app.js` | As contas e as perguntas | Só para mudar perguntas ou a lógica |
 | `style.css` | Cores e letras | Só para mudar o visual |
 | `_headers` | Proteções de segurança (vale quando o site está publicado) | Não |
+| `functions/api/feedback.js` | Recebe e guarda o "Este guia te ajudou?" | Não |
+| `banco/criar-tabelas.sql` | Cria o banco do feedback (usar uma vez) | Não |
+| `banco/consultas.sql` | Consultas prontas para ver o feedback | Não |
 | `LEIA-ME.md` | Este guia | Não |
 | `README.md` | Este guia em inglês (aparece na página do GitHub) | Não |
 
@@ -73,9 +76,42 @@ Antes de divulgar amplamente, troque cada `fonte` (hoje são sites de notícia) 
 
 O `_headers` também funciona no Netlify, se preferir usar ele.
 
+## Feedback: "Este guia te ajudou?"
+
+No fim do resultado aparecem dois rostos: **Sim, ajudou** e **Não ajudou**. Um toque envia e aparece "Obrigada!".
+
+O que é guardado: sim ou não, os nomes das ajudas que apareceram, quantas pessoas moram na casa, a data das regras e a data da resposta. **Nada que identifique a pessoa.** O IP não é guardado: só uma versão embaralhada dele, apagada no dia seguinte, para bloquear quem tenta mandar mais de 20 respostas por dia.
+
+As respostas ficam num banco de dados gratuito da própria Cloudflare (D1). O plano grátis aguenta muito mais acessos do que o guia vai ter.
+
+### Configurar (uma vez, uns 10 minutos)
+
+Faça os passos 1 a 3 **antes** de enviar os arquivos novos para o GitHub.
+
+1. **Criar o banco.** No painel da Cloudflare, abra **Storage & Databases › D1 SQL Database › Create**. Nome: `guia-feedback`. Clique em **Create**.
+2. **Criar as tabelas.** Dentro do banco, abra a aba **Console**, cole todo o texto de `banco/criar-tabelas.sql` e clique em **Execute**.
+3. **Ligar o banco ao site.** Abra **Workers & Pages ›** seu projeto **› Settings › Bindings › Add › D1 database**.
+   - Variable name: `DB` (exatamente assim, em maiúsculas)
+   - D1 database: `guia-feedback`
+   - Clique em **Save**.
+4. **(Opcional, mais segurança)** Em **Settings › Variables and Secrets**, adicione um segredo chamado `SAL` com qualquer frase longa e aleatória.
+5. **Enviar os arquivos.** No GitHub, envie o `app.js`, o `style.css` e as pastas `functions` e `banco` (dá para arrastar as pastas no Chrome). Clique em **Commit changes**. A Cloudflare publica de novo sozinha.
+6. **Testar.** Abra o site, faça uma consulta e toque num rosto. No Console do banco, rode `SELECT * FROM feedback;`. Sua resposta deve aparecer.
+
+Se o banco não estiver ligado, o site continua funcionando normalmente. O rosto agradece, e a resposta só não é guardada.
+
+### Ver as respostas
+
+No **Console** do banco D1, cole uma das consultas de `banco/consultas.sql`, por exemplo:
+- quantos disseram sim e não;
+- o percentual de "sim";
+- as últimas respostas "não ajudou", com as ajudas que apareceram. Isso mostra onde o guia confunde.
+
+Boa prática de privacidade: uma vez por ano, apague as respostas antigas (a última consulta do arquivo).
+
 ## Segurança: o que já está feito
 
-- **Sem banco de dados, sem login e sem formulário enviado.** As respostas das pessoas ficam só no celular delas e somem ao fechar a página. Não há dados para roubar.
+- **Sem login e sem dados pessoais.** As respostas das perguntas ficam só no celular e somem ao fechar a página. O único dado guardado é o "ajudou ou não", anônimo. Não há dados pessoais para roubar.
 - **Política de conteúdo (CSP)** no `_headers`: o navegador só aceita código deste site e a fonte do Google. Isso bloqueia a maioria das tentativas de injetar código.
 - **Textos tratados:** todo texto do `regras.js` é exibido como texto puro, nunca como código.
 - **Proteção contra a página ser embutida** em sites falsos (`frame-ancestors 'none'`).
